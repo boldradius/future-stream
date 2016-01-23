@@ -31,31 +31,21 @@ object PrintTime {
 }
 
 class FutureStreamSpec extends FlatSpec with Matchers {
-  def stream = Stream.iterate(0)(_ + 1).take(200)
-  def fsp = FutureStream.fromSeq(stream).flatMapValues(n => Empty(Timer.in(50).map(_ => Element(n, End(())))))
-  def fs = fsp.fold(0)(_ + _, (b, _) => b)
-
-  //TODO: test that memory consumption is small if we don't hold on to the whole streams
-  "FutureStream" should "allow thousands of concurrent instances" in {
-    val reps = 1 to 20000
-    //val fss = reps.map(_ => fsp.toList)
-    //Await.result(Future.sequence(fss), Inf) should === (reps.map(_ => stream))
-    PrintTime("FutureStream time: " + _) {
-      val fss = reps.map(_ => fs.end)
-      println(Await.result(Future.sequence(fss), Inf))
+  def increasing(len: Int) = FutureStream.fromSeq(Stream.iterate(0)(_ + 1).take(len))
+  def foldRate(numStreams: Int, periodMs: Int, length: Int) : Unit = {
+    def fsp = increasing(length).flatMapValues(n => Empty(Timer.in(periodMs).map(_ => Element(n, End(())))))
+    def fs = fsp.fold(0)(_ + _, (b, _) => b)
+    PrintTime(t => f"FutureStream fold rate: ${numStreams.toDouble*length/t}%f, time: $t%f") {
+      val fss = (1 to numStreams).map(_ => fs.end)
+      Await.result(Future.sequence(fss), Inf)
     }
   }
-}
 
-
-class StreamSpec extends FlatSpec with Matchers {
-  def stream = Stream.iterate(0)(_ + 1).take(200)
-  def fsp = FutureStream.fromSeq(stream).flatMapValues(n => new Pause({Thread.sleep(50); Element(n, End(()))}))
-  def fs = fsp.fold(0)(_ + _, (b, _) => b)
-
-  "Stream" should "allow thousands of concurrent instances" in {
-    val reps = 1 to 1900   // Desktop version of OSX limited to 2048 task threads (sysctl kern.num_taskthreads)
-    PrintTime("Stream time: " + _) {
+  def streamFoldRate(numStreams: Int, periodMs: Int, length: Int) : Unit = {
+    def fsp = increasing(length).flatMapValues(n => new Pause({Thread.sleep(periodMs); Element(n, End(()))}))
+    def fs = fsp.fold(0)(_ + _, (b, _) => b)
+    val reps = 1 to numStreams
+    PrintTime(t => f"Stream fold rate: ${numStreams.toDouble*length/t}%f, time: $t%f") {
       val fss = reps.map { _ =>
         val t = new Thread(new Runnable {
           override def run(): Unit =
@@ -67,5 +57,17 @@ class StreamSpec extends FlatSpec with Matchers {
       fss.foreach(_.join())
     }
   }
+
+
+  //TODO: test that memory consumption is small if we don't hold on to the whole streams
+  "FutureStream" should "allow thousands of concurrent instances" in {
+      foldRate(numStreams = 40000, periodMs = 1, length = 200)
+  }
+
+  "Stream" should "allow thousands of concurrent instances" in {
+     streamFoldRate(numStreams = 1900, periodMs = 1, length = 1000)  // Desktop version of OSX limited to 2048 task threads (sysctl kern.num_taskthreads)
+  }
+
 }
+
 
