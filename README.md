@@ -13,7 +13,7 @@ provide direct and permanent access to data. The values it contains never change
 the stream are discarded. 
 
 The structure of a FutureStream is recursive, just like a list. Whenever an element is accessible, so is
-the tail of the stream (the tail contains the all the elements except the first one). Keeping a reference to the tail does
+the tail of the stream (the tail contains all the elements except the first one). Keeping a reference to the tail does
 not keep a reference to the whole stream, so memory needed to store the initial elements of a stream can be
 reclaimed by only keeping references to the stream past those elements (therefore referencing only streams that exclude
 those elements).
